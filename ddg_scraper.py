@@ -34,7 +34,7 @@ def scrape_duckduckgo(query: str,
     scrape_time = datetime.datetime.now().isoformat()
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         page.goto(url)
         page.wait_for_selector("article[data-testid='result']", timeout=10000)
