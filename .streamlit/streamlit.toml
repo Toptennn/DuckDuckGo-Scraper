@@ -1,11 +1,7 @@
-[general]
 title = "DuckDuckGo Playwright Scraper"
 
-[server]
 headless = true
 port = 8501
 enableCORS = false
 
-[python]
-# optional: pin your Python version
 version = "3.11"

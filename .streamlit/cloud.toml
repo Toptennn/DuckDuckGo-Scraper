@@ -1,0 +1,4 @@
+before_install_commands = [
+  "pip install playwright",          # ensure playwright itself is present
+  "playwright install --with-deps"   # pull down Chromium and its libs
+]
