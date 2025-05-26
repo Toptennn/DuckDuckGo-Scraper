@@ -15,13 +15,15 @@ from urllib.parse import quote_plus
 # ————————————————————————————————————————————————
 @st.cache_resource
 def _install_playwright_browsers():
-    # this will only run once per Cloud worker
-    subprocess.run(
-        ["playwright", "install", "--with-deps"],
-        check=True,
-        stdout=subprocess.DEVNULL,  # suppress the chatter
-        stderr=subprocess.DEVNULL,
-    )
+    """
+    On Streamlit Cloud the playwright CLI may not be on PATH,
+    so we invoke it via Python: `python -m playwright install`.
+    """
+    cmd = [
+        sys.executable, "-m", "playwright", "install", "--with-deps"
+    ]
+    # Let the logs show up in the Cloud logs so we can debug if it still fails
+    subprocess.run(cmd, check=True)
 
 _install_playwright_browsers()
 
