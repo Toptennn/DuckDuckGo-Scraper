@@ -7,12 +7,33 @@ if sys.platform.startswith("win"):
 
 import streamlit as st
 from urllib.parse import quote_plus
+# ————————————————————————————————————————————————
+# Ensure Playwright has downloaded its browser binaries
+# ————————————————————————————————————————————————
+@st.experimental_singleton
+def _install_playwright_browsers():
+    # this will only run once per Cloud worker
+    subprocess.run(
+        ["playwright", "install", "--with-deps"],
+        check=True,
+        stdout=subprocess.DEVNULL,  # suppress the chatter
+        stderr=subprocess.DEVNULL,
+    )
+
+_install_playwright_browsers()
+
+# now it’s safe to import Playwright
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 import time
 import pandas as pd
 import io
 import datetime
+
+# main.py (top of file)
+
+import subprocess
+import streamlit as st
 
 # --- Scraper function using Playwright ---
 def scrape_duckduckgo(query: str,
