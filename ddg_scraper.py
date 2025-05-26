@@ -1,3 +1,6 @@
+import subprocess
+import streamlit as st
+
 import asyncio
 import sys
 
@@ -10,7 +13,7 @@ from urllib.parse import quote_plus
 # ————————————————————————————————————————————————
 # Ensure Playwright has downloaded its browser binaries
 # ————————————————————————————————————————————————
-@st.experimental_singleton
+@st.cache_resource
 def _install_playwright_browsers():
     # this will only run once per Cloud worker
     subprocess.run(
@@ -31,9 +34,6 @@ import io
 import datetime
 
 # main.py (top of file)
-
-import subprocess
-import streamlit as st
 
 # --- Scraper function using Playwright ---
 def scrape_duckduckgo(query: str,
