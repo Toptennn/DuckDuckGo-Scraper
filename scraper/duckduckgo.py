@@ -92,7 +92,7 @@ class DuckDuckGoScraper:
                 if elements:
                     print(f"Found {len(elements)} results using selector: {selector}")
                     return True
-            except:
+            except Exception:
                 continue
         return False
 
@@ -107,10 +107,10 @@ class DuckDuckGoScraper:
         # Check for blocking patterns
         blocking_keywords = ['blocked', 'captcha', 'verify', 'protection', 'cloudflare']
         if any(keyword in page_content.lower() for keyword in blocking_keywords):
-            raise Exception("Page appears to be blocked or showing CAPTCHA")
+            raise RuntimeError("Page appears to be blocked or showing CAPTCHA")
         
         if "duckduckgo" not in page_title.lower():
-            raise Exception(f"Unexpected page loaded. Title: {page_title}")
+            raise RuntimeError(f"Unexpected page loaded. Title: {page_title}")
         
         # Try scrolling and waiting
         page.evaluate("window.scrollTo(0, 500)")
@@ -121,8 +121,8 @@ class DuckDuckGoScraper:
         try:
             page.wait_for_selector("article[data-testid='result'], .result", timeout=10000)
             return True
-        except:
-            raise Exception("Could not find search results after multiple attempts")
+        except Exception:
+            raise RuntimeError("Could not find search results after multiple attempts")
 
     def _click_more_results(self, page, max_clicks: int) -> int:
         """Click 'More results' button multiple times and return actual clicks."""
@@ -149,7 +149,7 @@ class DuckDuckGoScraper:
                         print(f"Clicked more results button {i+1} times")
                         pages_retrieved += 1
                         break
-                except:
+                except Exception:
                     continue
             
             if not clicked:
