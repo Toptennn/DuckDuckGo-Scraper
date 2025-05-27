@@ -1,5 +1,3 @@
-# scraper/duckduckgo.py
-
 import datetime
 from urllib.parse import quote_plus
 
