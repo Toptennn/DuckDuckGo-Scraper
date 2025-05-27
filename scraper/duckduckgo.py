@@ -1,87 +1,16 @@
-import asyncio
-import sys
+# scraper/duckduckgo.py
+
 import datetime
-import io
-import time
 from urllib.parse import quote_plus
 
 import pandas as pd
-import streamlit as st
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
-# Configure Windows event loop policy for subprocess support
-if sys.platform.startswith("win"):
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-
+import config
 
 class DuckDuckGoScraper:
     """DuckDuckGo search results scraper using Playwright."""
-    
-    # Browser launch arguments for stealth mode
-    BROWSER_ARGS = [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-renderer-backgrounding',
-        '--disable-features=TranslateUI',
-        '--disable-ipc-flooding-protection',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor',
-        '--disable-extensions',
-        '--disable-plugins',
-        '--disable-default-apps',
-        '--no-default-browser-check',
-        '--disable-hang-monitor',
-        '--disable-prompt-on-repost',
-        '--disable-sync',
-        '--metrics-recording-only',
-        '--no-crash-upload',
-        '--disable-background-networking'
-    ]
-    
-    # User agent for realistic browser behavior
-    USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    
-    # Selectors for finding search results
-    RESULT_SELECTORS = [
-        "article[data-testid='result']",
-        ".result",
-        "[data-testid='result']",
-        ".web-result",
-        ".result__body",
-        "div[data-area='primary'] > div > div",
-        "#links .result",
-        ".organic-result"
-    ]
-    
-    # Selectors for finding title links within results
-    LINK_SELECTORS = [
-        "a[data-testid='result-title-a']",
-        "h2 a",
-        "h3 a", 
-        ".result__title a",
-        ".result-title a",
-        "a"
-    ]
-    
-    # Selectors for "More results" button
-    MORE_RESULTS_SELECTORS = [
-        "button#more-results",
-        "button[id='more-results']",
-        ".more-results",
-        "button:has-text('More results')",
-        "button:has-text('ผลลัพธ์เพิ่มเติม')",
-        "a:has-text('More results')",
-        ".more_results"
-    ]
 
     def __init__(self):
         self.scrape_time = datetime.datetime.now().isoformat()
@@ -133,16 +62,16 @@ class DuckDuckGoScraper:
             'Sec-Fetch-Site': 'none',
             'Sec-Fetch-User': '?1',
             'Upgrade-Insecure-Requests': '1',
-            'User-Agent': self.USER_AGENT
+            'User-Agent': config.USER_AGENT
         }
 
     def _setup_browser(self, playwright, headless: bool):
         """Setup and configure browser with stealth settings."""
-        browser = playwright.chromium.launch(headless=headless, args=self.BROWSER_ARGS)
+        browser = playwright.chromium.launch(headless=headless, args=config.BROWSER_ARGS)
         
         context = browser.new_context(
             viewport={'width': 1920, 'height': 1080},
-            user_agent=self.USER_AGENT,
+            user_agent=config.USER_AGENT,
             locale='en-US',
             timezone_id='America/New_York',
             java_script_enabled=True,
@@ -158,7 +87,7 @@ class DuckDuckGoScraper:
 
     def _wait_for_results(self, page) -> bool:
         """Wait for search results to appear on the page."""
-        for selector in self.RESULT_SELECTORS:
+        for selector in config.RESULT_SELECTORS:
             try:
                 page.wait_for_selector(selector, timeout=5000)
                 elements = page.query_selector_all(selector)
@@ -213,7 +142,7 @@ class DuckDuckGoScraper:
             
             # Try to click more results button
             clicked = False
-            for selector in self.MORE_RESULTS_SELECTORS:
+            for selector in config.MORE_RESULTS_SELECTORS:
                 try:
                     if page.locator(selector).is_visible():
                         page.click(selector)
@@ -238,7 +167,7 @@ class DuckDuckGoScraper:
         
         # Find articles using selectors
         articles = []
-        for selector in self.RESULT_SELECTORS:
+        for selector in config.RESULT_SELECTORS:
             articles = soup.select(selector)
             if articles:
                 print(f"Found {len(articles)} articles using selector: {selector}")
@@ -266,7 +195,7 @@ class DuckDuckGoScraper:
 
     def _find_title_link(self, article):
         """Find the main title link within an article."""
-        for selector in self.LINK_SELECTORS:
+        for selector in config.LINK_SELECTORS:
             link = article.select_one(selector)
             if link:
                 return link
@@ -340,108 +269,3 @@ class DuckDuckGoScraper:
         # Parse results
         results = self._parse_results(html)
         return pd.DataFrame(results), pages_retrieved
-
-
-def create_download_files(df: pd.DataFrame) -> tuple[str, bytes]:
-    """Create CSV and Excel files for download."""
-    # CSV
-    csv_data = df.to_csv(index=False, encoding='utf-8-sig')
-    
-    # Excel
-    excel_buffer = io.BytesIO()
-    with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Results')
-    excel_data = excel_buffer.getvalue()
-    
-    return csv_data, excel_data
-
-
-def display_error_suggestions():
-    """Display troubleshooting suggestions for users."""
-    st.info("💡 แนะนำการแก้ไข:")
-    suggestions = [
-        "ปิด Headless Mode เพื่อดูว่าเกิดอะไรขึ้น",
-        "เพิ่มหน่วงเวลาหลังคลิก",
-        "ลดจำนวนการคลิก 'ผลลัพธ์เพิ่มเติม'",
-        "DuckDuckGo อาจมีการป้องกัน bot - ลองใช้เว็บไซต์อื่น"
-    ]
-    for suggestion in suggestions:
-        st.info(f"• {suggestion}")
-
-
-def display_no_results_info():
-    """Display information when no results are found."""
-    st.info("💡 สาเหตุที่เป็นไปได้:")
-    reasons = [
-        "เว็บไซต์มีการป้องกัน bot",
-        "โครงสร้าง HTML ของเว็บไซต์เปลี่ยนแปลง",
-        "คำค้นหาไม่มีผลลัพธ์",
-        "เครือข่ายอินเทอร์เน็ตช้าหรือมีปัญหา"
-    ]
-    for reason in reasons:
-        st.info(f"• {reason}")
-
-
-def main():
-    """Main Streamlit application."""
-    st.set_page_config(page_title="🦆 DuckDuckGo Scraper", layout="wide")
-    st.title("🦆 DuckDuckGo Playwright Scraper")
-    st.markdown("กรุณากรอกคำค้นหาและตั้งค่าต่าง ๆ จากนั้นคลิก Search เพื่อดูผลลัพธ์")
-
-    # Sidebar configuration
-    st.sidebar.header("การตั้งค่า Scraper")
-    max_pages = st.sidebar.slider("จำนวนหน้า", 1, 50, 20)
-
-    # Main input
-    query = st.text_input(
-        "🔍 คำค้นหา:", 
-        value="", 
-        placeholder="เช่น artificial intelligence"
-    )
-    
-    if st.button("Search"):
-        if not query.strip():
-            st.error("กรุณาใส่คำค้นหาก่อนคลิก Search")
-            return
-
-        scraper = DuckDuckGoScraper()
-        
-        with st.spinner("กำลังค้นหา... กรุณารอสักครู่"):
-            try:
-                df, pages_retrieved = scraper.scrape(query, max_pages, headless=True)
-            except Exception as e:
-                st.error(f"เกิดข้อผิดพลาดระหว่างการสแครป: {e}")
-                display_error_suggestions()
-                return
-
-        # Display results
-        if df.empty:
-            st.warning("ไม่พบผลลัพธ์ใด ๆ")
-            display_no_results_info()
-        else:
-            st.success(f"พบผลลัพธ์ {len(df)} รายการ จาก {pages_retrieved} หน้า")
-            
-            if pages_retrieved < max_pages:
-                st.info(f"หมายเหตุ: Scraping ทำได้เพียง {pages_retrieved} หน้า จากที่ตั้งค่า {max_pages} หน้า")
-            
-            st.dataframe(df, use_container_width=True)
-
-            # Download buttons
-            csv_data, excel_data = create_download_files(df)
-            timestamp = int(time.time())
-            
-            st.download_button(
-                "⬇️ ดาวน์โหลด CSV", 
-                data=csv_data, 
-                file_name=f"ddg_{timestamp}.csv"
-            )
-            
-            st.download_button(
-                "⬇️ ดาวน์โหลด Excel", 
-                data=excel_data, 
-                file_name=f"ddg_{timestamp}.xlsx"
-            )
-
-
-if __name__ == "__main__":
-    main()

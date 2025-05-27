@@ -1,7 +1,0 @@
-title = "DuckDuckGo Playwright Scraper"
-
-headless = true
-port = 8501
-enableCORS = false
-
-version = "3.11"
