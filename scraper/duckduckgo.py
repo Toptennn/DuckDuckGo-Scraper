@@ -53,21 +53,29 @@ class DuckDuckGoScraper:
             }
         })
         
-        # Try to use system chromium in cloud environments
-        try:
-            if os.getenv('STREAMLIT_SHARING'):
-                # Use system chromium
-                chrome_options.binary_location = '/usr/bin/chromium'
-                service = Service('/usr/bin/chromedriver')
-            else:
-                # Use webdriver manager for local development
-                service = Service(ChromeDriverManager().install())
-            
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-        except Exception as e:
-            # Fallback to webdriver manager
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=chrome_options)
+        # Enhanced driver setup with better error handling
+        driver = None
+        
+        # Try multiple approaches to setup the driver
+        setup_attempts = [
+            # Attempt 1: Use webdriver-manager (works for most cases)
+            lambda: self._setup_with_webdriver_manager(chrome_options),
+            # Attempt 2: Use system Chrome/Chromium in cloud
+            lambda: self._setup_with_system_chrome(chrome_options),
+            # Attempt 3: Fallback to basic setup
+            lambda: self._setup_basic_chrome(chrome_options)
+        ]
+        
+        for i, setup_func in enumerate(setup_attempts):
+            try:
+                driver = setup_func()
+                if driver:
+                    print(f"Driver setup successful with method {i+1}")
+                    break
+            except Exception as e:
+                print(f"Setup method {i+1} failed: {e}")
+                if i == len(setup_attempts) - 1:  # Last attempt
+                    raise RuntimeError(f"Failed to setup Chrome driver after all attempts. Last error: {e}")
         
         # Execute stealth script
         driver.execute_script("""
@@ -89,6 +97,51 @@ class DuckDuckGoScraper:
         """)
         
         return driver
+
+    def _setup_with_webdriver_manager(self, chrome_options):
+        """Setup driver using webdriver-manager (auto-downloads compatible ChromeDriver)."""
+        try:
+            service = Service(ChromeDriverManager().install())
+            return webdriver.Chrome(service=service, options=chrome_options)
+        except Exception as e:
+            print(f"WebDriver Manager setup failed: {e}")
+            raise
+
+    def _setup_with_system_chrome(self, chrome_options):
+        """Setup driver using system Chrome/Chromium."""
+        if not os.getenv('STREAMLIT_SHARING') and not os.path.exists('/usr/bin/chromium'):
+            raise Exception("System Chrome not available")
+        
+        # For cloud environments, try to use system Chrome with compatible driver
+        chrome_options.binary_location = '/usr/bin/chromium'
+        
+        # Try to find compatible ChromeDriver
+        possible_drivers = [
+            '/usr/bin/chromedriver',
+            '/usr/local/bin/chromedriver',
+            '/opt/chrome/chromedriver'
+        ]
+        
+        for driver_path in possible_drivers:
+            if os.path.exists(driver_path):
+                try:
+                    service = Service(driver_path)
+                    return webdriver.Chrome(service=service, options=chrome_options)
+                except Exception as e:
+                    print(f"Failed with driver at {driver_path}: {e}")
+                    continue
+        
+        raise Exception("No compatible system ChromeDriver found")
+
+    def _setup_basic_chrome(self, chrome_options):
+        """Basic Chrome setup as last resort."""
+        try:
+            # Remove binary location if set
+            chrome_options.binary_location = None
+            return webdriver.Chrome(options=chrome_options)
+        except Exception as e:
+            print(f"Basic Chrome setup failed: {e}")
+            raise
 
     def _wait_for_results(self, driver) -> bool:
         """Wait for search results to appear on the page."""

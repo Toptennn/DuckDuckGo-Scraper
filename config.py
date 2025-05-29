@@ -33,13 +33,7 @@ CHROME_OPTIONS = [
     '--disable-gpu-logging',
     '--silent',
     '--log-level=3',
-    '--headless',  # Always headless in cloud
-    '--disable-software-rasterizer',
-    '--disable-background-timer-throttling',
-    '--disable-backgrounding-occluded-windows',
-    '--disable-renderer-backgrounding',
-    '--disable-features=TranslateUI',
-    '--disable-ipc-flooding-protection'
+    '--disable-software-rasterizer'
 ]
 
 # Add environment-specific options
