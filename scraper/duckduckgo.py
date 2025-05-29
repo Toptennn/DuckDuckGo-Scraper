@@ -109,17 +109,26 @@ class DuckDuckGoScraper:
 
     def _setup_with_system_chrome(self, chrome_options):
         """Setup driver using system Chrome/Chromium."""
-        if not os.getenv('STREAMLIT_SHARING') and not os.path.exists('/usr/bin/chromium'):
-            raise Exception("System Chrome not available")
+        # Check for cloud environment or local Chromium installation
+        chromium_paths = ['/usr/bin/chromium', '/usr/bin/chromium-browser']
+        chromium_found = False
         
-        # For cloud environments, try to use system Chrome with compatible driver
-        chrome_options.binary_location = '/usr/bin/chromium'
+        for path in chromium_paths:
+            if os.path.exists(path):
+                chrome_options.binary_location = path
+                chromium_found = True
+                print(f"Found Chromium at: {path}")
+                break
+        
+        if not chromium_found:
+            raise Exception("System Chrome/Chromium not available")
         
         # Try to find compatible ChromeDriver
         possible_drivers = [
             '/usr/bin/chromedriver',
             '/usr/local/bin/chromedriver',
-            '/opt/chrome/chromedriver'
+            '/opt/chrome/chromedriver',
+            '/usr/bin/chromium-driver'
         ]
         
         for driver_path in possible_drivers:
@@ -131,8 +140,15 @@ class DuckDuckGoScraper:
                     print(f"Failed with driver at {driver_path}: {e}")
                     continue
         
-        raise Exception("No compatible system ChromeDriver found")
-
+        # If no system driver found, try webdriver-manager as fallback
+        try:
+            print("Trying webdriver-manager as fallback for system Chrome...")
+            service = Service(ChromeDriverManager().install())
+            return webdriver.Chrome(service=service, options=chrome_options)
+        except Exception as e:
+            print(f"WebDriver Manager fallback failed: {e}")
+            raise Exception("No compatible ChromeDriver found for system Chrome")
+        
     def _setup_basic_chrome(self, chrome_options):
         """Basic Chrome setup as last resort."""
         try:

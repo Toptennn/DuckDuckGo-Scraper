@@ -37,12 +37,14 @@ CHROME_OPTIONS = [
 ]
 
 # Add environment-specific options
-if os.getenv('STREAMLIT_SHARING'):  # Streamlit Cloud environment
+if os.getenv('STREAMLIT_SHARING') or os.getenv('STREAMLIT_CLOUD'):
     CHROME_OPTIONS.extend([
         '--single-process',
         '--disable-dev-shm-usage',
-        '--no-zygote'
+        '--no-zygote',
+        '--disable-gpu-sandbox'
     ])
+
 
 RESULT_SELECTORS = [
     "article[data-testid='result']",
