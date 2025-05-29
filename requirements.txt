@@ -1,5 +1,7 @@
 streamlit
-playwright
+selenium
+webdriver-manager
 beautifulsoup4
 pandas
 XlsxWriter
+openpyxl

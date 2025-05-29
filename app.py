@@ -51,7 +51,7 @@ def main():
 
     # Sidebar configuration
     st.sidebar.header("การตั้งค่า Scraper")
-    max_pages = st.sidebar.slider("จำนวนหน้า", 1, 50, 20)
+    max_pages = st.sidebar.slider("จำนวนหน้า", 1, 100, 20)
 
     # Main input
     query = st.text_input(

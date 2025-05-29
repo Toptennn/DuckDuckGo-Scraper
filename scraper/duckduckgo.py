@@ -1,106 +1,121 @@
 import datetime
+import os
 from urllib.parse import quote_plus
 
 import pandas as pd
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service
 
 import config
 
 class DuckDuckGoScraper:
-    """DuckDuckGo search results scraper using Playwright."""
+    """DuckDuckGo search results scraper using Selenium."""
 
     def __init__(self):
         self.scrape_time = datetime.datetime.now().isoformat()
 
-    def _get_stealth_script(self) -> str:
-        """Return JavaScript code to make browser appear more human-like."""
-        return """
-            // Remove webdriver property
+    def _setup_driver(self, headless: bool = True):
+        """Setup and configure Chrome driver with stealth settings."""
+        chrome_options = Options()
+        
+        # Add all Chrome options
+        for option in config.CHROME_OPTIONS:
+            chrome_options.add_argument(option)
+        
+        # Always headless in cloud environments
+        if headless or os.getenv('STREAMLIT_SHARING'):
+            chrome_options.add_argument('--headless')
+        
+        # Set user agent
+        chrome_options.add_argument(f'--user-agent={config.USER_AGENT}')
+        
+        # Disable automation detection
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+
+        # Performance preferences
+        chrome_options.add_experimental_option("prefs", {
+            "profile.default_content_setting_values": {
+                "images": 2,  # Block images
+                "plugins": 2,  # Block plugins
+                "popups": 2,  # Block popups
+                "geolocation": 2,  # Block location sharing
+                "notifications": 2,  # Block notifications
+                "media_stream": 2,  # Block media stream
+            }
+        })
+        
+        # Try to use system chromium in cloud environments
+        try:
+            if os.getenv('STREAMLIT_SHARING'):
+                # Use system chromium
+                chrome_options.binary_location = '/usr/bin/chromium'
+                service = Service('/usr/bin/chromedriver')
+            else:
+                # Use webdriver manager for local development
+                service = Service(ChromeDriverManager().install())
+            
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+        except Exception as e:
+            # Fallback to webdriver manager
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        # Execute stealth script
+        driver.execute_script("""
             Object.defineProperty(navigator, 'webdriver', {
                 get: () => undefined,
             });
             
-            // Mock plugins
             Object.defineProperty(navigator, 'plugins', {
                 get: () => [1, 2, 3, 4, 5],
             });
             
-            // Mock languages
             Object.defineProperty(navigator, 'languages', {
                 get: () => ['en-US', 'en'],
             });
             
-            // Mock permissions
-            const originalQuery = window.navigator.permissions.query;
-            window.navigator.permissions.query = (parameters) => (
-                parameters.name === 'notifications' ?
-                    Promise.resolve({ state: Notification.permission }) :
-                    originalQuery(parameters)
-            );
-            
-            // Hide automation
             window.chrome = {
                 runtime: {},
             };
-        """
-
-    def _get_http_headers(self) -> dict:
-        """Return realistic HTTP headers."""
-        return {
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Language': 'en-US,en;q=0.9,th;q=0.8',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Cache-Control': 'max-age=0',
-            'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            'Sec-Ch-Ua-Mobile': '?0',
-            'Sec-Ch-Ua-Platform': '"Windows"',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Upgrade-Insecure-Requests': '1',
-            'User-Agent': config.USER_AGENT
-        }
-
-    def _setup_browser(self, playwright, headless: bool):
-        """Setup and configure browser with stealth settings."""
-        browser = playwright.chromium.launch(headless=headless, args=config.BROWSER_ARGS)
+        """)
         
-        context = browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent=config.USER_AGENT,
-            locale='en-US',
-            timezone_id='America/New_York',
-            java_script_enabled=True,
-            accept_downloads=False,
-            ignore_https_errors=True
-        )
-        
-        page = context.new_page()
-        page.add_init_script(self._get_stealth_script())
-        page.set_extra_http_headers(self._get_http_headers())
-        
-        return browser, context, page
+        return driver
 
-    def _wait_for_results(self, page) -> bool:
+    def _wait_for_results(self, driver) -> bool:
         """Wait for search results to appear on the page."""
+        wait = WebDriverWait(driver, 10)
+        
         for selector in config.RESULT_SELECTORS:
             try:
-                page.wait_for_selector(selector, timeout=5000)
-                elements = page.query_selector_all(selector)
+                # Convert CSS selector to appropriate By strategy
+                if selector.startswith('#'):
+                    elements = wait.until(EC.presence_of_all_elements_located((By.ID, selector[1:])))
+                elif selector.startswith('.'):
+                    elements = wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, selector[1:])))
+                else:
+                    elements = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, selector)))
+                
                 if elements:
                     print(f"Found {len(elements)} results using selector: {selector}")
                     return True
-            except Exception:
+            except TimeoutException:
                 continue
         return False
 
-    def _handle_page_not_loaded(self, page):
+    def _handle_page_not_loaded(self, driver):
         """Handle cases where search results don't load properly."""
-        page_title = page.title()
-        page_url = page.url
-        page_content = page.inner_text("body")[:500] if page.query_selector("body") else "No body found"
+        page_title = driver.title
+        page_url = driver.current_url
+        page_content = driver.find_element(By.TAG_NAME, "body").text[:500] if driver.find_elements(By.TAG_NAME, "body") else "No body found"
         
         print(f"Debug - Title: {page_title}, URL: {page_url}")
         
@@ -113,43 +128,68 @@ class DuckDuckGoScraper:
             raise RuntimeError(f"Unexpected page loaded. Title: {page_title}")
         
         # Try scrolling and waiting
-        page.evaluate("window.scrollTo(0, 500)")
-        page.wait_for_load_state("networkidle")
-        page.evaluate("window.scrollTo(0, 0)")
+        driver.execute_script("window.scrollTo(0, 500);")
+        driver.execute_script("window.scrollTo(0, 0);")
         
         # Final attempt
         try:
-            page.wait_for_selector("article[data-testid='result'], .result", timeout=10000)
+            wait = WebDriverWait(driver, 10)
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "article[data-testid='result'], .result")))
             return True
-        except Exception:
+        except TimeoutException:
             raise RuntimeError("Could not find search results after multiple attempts")
 
-    def _click_more_results(self, page, max_clicks: int) -> int:
+    def _click_more_results(self, driver, max_clicks: int) -> int:
         """Click 'More results' button multiple times and return actual clicks."""
         pages_retrieved = 1
+        wait = WebDriverWait(driver, 5)
         
         for i in range(max_clicks - 1):
             # Scroll to bottom gradually
-            page.evaluate("""
+            driver.execute_script("""
                 const scrollHeight = document.body.scrollHeight;
                 const currentScroll = window.pageYOffset;
                 const targetScroll = scrollHeight - window.innerHeight;
                 window.scrollTo(0, Math.min(currentScroll + 500, targetScroll));
             """)
-            page.wait_for_load_state("networkidle")
+
+            # Wait for any dynamic content to load using explicit wait
+            try:
+                # Wait for page height to stabilize or new content to appear
+                WebDriverWait(driver, 2).until(
+                    lambda d: d.execute_script("return document.readyState") == "complete"
+                )
+            except TimeoutException:
+                pass
             
             # Try to click more results button
             clicked = False
             for selector in config.MORE_RESULTS_SELECTORS:
                 try:
-                    if page.locator(selector).is_visible():
-                        page.click(selector)
-                        page.wait_for_load_state("networkidle", timeout=10000)
+                    # Handle different selector types
+                    if ':contains(' in selector:
+                        # Convert CSS :contains() to XPath
+                        text = selector.split("':contains('")[1].split("')")[0]
+                        tag = selector.split(':contains(')[0]
+                        xpath = f"//{tag}[contains(text(), '{text}')]"
+                        element = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+                    else:
+                        element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, selector)))
+                    
+                    if element.is_displayed():
+                        driver.execute_script("arguments[0].click();", element)
+
+                        # Wait for new results to load
+                        old_height = driver.execute_script("return document.body.scrollHeight")
+                        WebDriverWait(driver, 3).until(
+                            lambda d: d.execute_script("return document.body.scrollHeight") > old_height
+                        )
+
                         clicked = True
                         print(f"Clicked more results button {i+1} times")
                         pages_retrieved += 1
                         break
-                except Exception:
+                except (TimeoutException, NoSuchElementException):
                     continue
             
             if not clicked:
@@ -238,31 +278,34 @@ class DuckDuckGoScraper:
             
         url = f"https://duckduckgo.com/?q={quote_plus(query)}&t=h_"
         
-        with sync_playwright() as p:
-            browser, context, page = self._setup_browser(p, headless)
+        driver = self._setup_driver(headless)
+        
+        try:
+            # Navigate to DuckDuckGo homepage first
+            driver.get("https://duckduckgo.com/")
             
-            try:
-                # Navigate to DuckDuckGo homepage first
-                page.goto("https://duckduckgo.com/", wait_until='domcontentloaded', timeout=30000)
-                page.wait_for_selector("input#searchbox_input", timeout=10000)
-                
-                # Navigate to search results
-                page.goto(url, wait_until='domcontentloaded', timeout=30000)
-                page.wait_for_selector("article[data-nrn='result'] a[data-testid='result-title-a']", timeout=10000)
-                
-                # Wait for results to load
-                if not self._wait_for_results(page):
-                    self._handle_page_not_loaded(page)
-                
-                # Click more results button
-                pages_retrieved = self._click_more_results(page, max_pages)
-                
-                # Get final HTML
-                html = page.content()
-                
-            finally:
-                context.close()
-                browser.close()
+            # Wait for search box and navigate to search results
+            wait = WebDriverWait(driver, 10)
+            wait.until(EC.presence_of_element_located((By.ID, "searchbox_input")))
+            
+            # Navigate to search results
+            driver.get(url)
+            
+            # Wait for results to load
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "article[data-nrn='result'] a[data-testid='result-title-a']")))
+            
+            # Wait for results to load
+            if not self._wait_for_results(driver):
+                self._handle_page_not_loaded(driver)
+            
+            # Click more results button
+            pages_retrieved = self._click_more_results(driver, max_pages)
+            
+            # Get final HTML
+            html = driver.page_source
+            
+        finally:
+            driver.quit()
         
         # Parse results
         results = self._parse_results(html)
