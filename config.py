@@ -12,7 +12,7 @@ CHROME_OPTIONS = [
     '--disable-background-timer-throttling',
     '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding',
-    '--disable-features=TranslateUI,VizDisplayCompositor',
+    '--disable-features=TranslateUI,VizDisplayCompositor,AudioServiceOutOfProcess',
     '--disable-ipc-flooding-protection',
     '--disable-blink-features=AutomationControlled',
     '--disable-web-security',
@@ -32,9 +32,6 @@ CHROME_OPTIONS = [
     '--log-level=3',
     '--window-size=1280,720',
     '--remote-debugging-port=0',
-    '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding',
-    '--disable-backgrounding-occluded-windows',
     '--disable-client-side-phishing-detection',
     '--disable-crash-reporter',
     '--disable-oopr-debug-crash-dump',
@@ -42,7 +39,12 @@ CHROME_OPTIONS = [
     '--disable-low-res-tiling',
     '--memory-pressure-off',
     '--disable-permissions-api',
-    '--disable-features=VizDisplayCompositor'
+    '--disable-component-update',
+    '--disable-domain-reliability',
+    '--aggressive-cache-discard',
+    '--disable-file-system',
+    '--disable-databases',
+    '--disable-local-storage'
 ]
 
 # Add cloud-specific options

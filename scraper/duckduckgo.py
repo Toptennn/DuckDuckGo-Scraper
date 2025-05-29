@@ -23,7 +23,7 @@ class DuckDuckGoScraper:
         self.scrape_time = datetime.datetime.now().isoformat()
 
     def _setup_driver(self, headless: bool = True):
-        """Setup and configure Chrome driver with enhanced cloud compatibility."""
+        """Setup and configure Chrome driver with performance optimizations."""
         chrome_options = Options()
         
         # Basic Chrome options
@@ -32,23 +32,32 @@ class DuckDuckGoScraper:
         
         # Force headless in cloud environments or when requested
         if headless or os.getenv('STREAMLIT_SHARING') or os.getenv('STREAMLIT_CLOUD'):
-            chrome_options.add_argument('--headless=new')  # Use new headless mode
+            chrome_options.add_argument('--headless=new')
         
-        # Enhanced cloud-specific options
-        chrome_options.add_argument('--no-first-run')
-        chrome_options.add_argument('--no-default-browser-check')
-        chrome_options.add_argument('--disable-default-apps')
-        chrome_options.add_argument('--disable-popup-blocking')
-        chrome_options.add_argument('--disable-translate')
-        chrome_options.add_argument('--disable-background-timer-throttling')
-        chrome_options.add_argument('--disable-renderer-backgrounding')
-        chrome_options.add_argument('--disable-backgrounding-occluded-windows')
-        chrome_options.add_argument('--disable-client-side-phishing-detection')
-        chrome_options.add_argument('--disable-sync')
-        chrome_options.add_argument('--disable-features=TranslateUI')
-        chrome_options.add_argument('--disable-ipc-flooding-protection')
-        chrome_options.add_argument('--memory-pressure-off')
-        chrome_options.add_argument('--max_old_space_size=4096')
+        # Performance-focused options
+        performance_options = [
+            '--no-first-run',
+            '--no-default-browser-check',
+            '--disable-default-apps',
+            '--disable-popup-blocking',
+            '--disable-translate',
+            '--disable-background-timer-throttling',
+            '--disable-renderer-backgrounding',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-client-side-phishing-detection',
+            '--disable-sync',
+            '--disable-features=TranslateUI',
+            '--disable-ipc-flooding-protection',
+            '--memory-pressure-off',
+            '--max_old_space_size=4096',
+            '--aggressive-cache-discard',
+            '--disable-background-networking',
+            '--disable-component-update',
+            '--disable-domain-reliability'
+        ]
+        
+        for option in performance_options:
+            chrome_options.add_argument(option)
         
         # Set user agent
         chrome_options.add_argument(f'--user-agent={config.USER_AGENT}')
@@ -57,23 +66,25 @@ class DuckDuckGoScraper:
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
 
-        # Performance preferences
+        # Enhanced performance preferences
         chrome_options.add_experimental_option("prefs", {
             "profile.default_content_setting_values": {
-                "images": 2,
-                "plugins": 2,
+                "images": 2,  # Block images
+                "plugins": 2,  # Block plugins
                 "popups": 2,
                 "geolocation": 2,
                 "notifications": 2,
                 "media_stream": 2,
+            },
+            "profile.managed_default_content_settings": {
+                "images": 2
             }
         })
         
-        # Try setup with enhanced error handling
+        # Rest of setup method remains the same...
         driver = None
         last_error = None
         
-        # Setup attempts in order of preference
         setup_methods = [
             ("WebDriver Manager", self._setup_with_webdriver_manager),
             ("System Chrome", self._setup_with_system_chrome),
@@ -95,6 +106,10 @@ class DuckDuckGoScraper:
         if not driver:
             raise RuntimeError(f"All Chrome setup methods failed. Last error: {last_error}")
         
+        # Set optimized timeouts
+        driver.set_page_load_timeout(20)  # Reduced from 30
+        driver.implicitly_wait(5)  # Reduced from 10
+        
         # Apply stealth settings
         try:
             self._apply_stealth_settings(driver)
@@ -114,10 +129,6 @@ class DuckDuckGoScraper:
             service.creation_flags = 0x08000000  # CREATE_NO_WINDOW flag for Windows
             
             driver = webdriver.Chrome(service=service, options=chrome_options)
-            
-            # Test the driver
-            driver.set_page_load_timeout(30)
-            driver.implicitly_wait(10)
             
             return driver
             
@@ -251,59 +262,61 @@ class DuckDuckGoScraper:
         return False
 
     def _handle_page_not_loaded(self, driver):
-        """Enhanced page loading error handling."""
+        """Optimized page loading error handling."""
         try:
-            page_title = driver.title
+            # Quick checks first
             page_url = driver.current_url
             
+            # Fast content check using JavaScript
+            page_info = driver.execute_script("""
+                return {
+                    title: document.title,
+                    bodyText: document.body ? document.body.innerText.slice(0, 200) : '',
+                    readyState: document.readyState
+                };
+            """)
+            
             print(f"🔍 Debug Info:")
-            print(f"   Title: {page_title}")
+            print(f"   Title: {page_info['title']}")
             print(f"   URL: {page_url}")
+            print(f"   Content preview: {page_info['bodyText'][:100]}...")
             
-            # Get page content safely
-            try:
-                page_content = driver.find_element(By.TAG_NAME, "body").text[:500]
-            except:
-                page_content = "Could not retrieve page content"
-            
-            print(f"   Content preview: {page_content[:100]}...")
-            
-            # Check for common blocking patterns
+            # Check for blocking patterns
             blocking_keywords = ['blocked', 'captcha', 'verify', 'protection', 'cloudflare', 'access denied']
-            if any(keyword in page_content.lower() for keyword in blocking_keywords):
-                raise RuntimeError(f"❌ Page blocked or CAPTCHA detected. Content: {page_content[:200]}")
+            if any(keyword in page_info['bodyText'].lower() for keyword in blocking_keywords):
+                raise RuntimeError(f"❌ Page blocked or CAPTCHA detected.")
             
             # Verify we're on DuckDuckGo
-            if "duckduckgo" not in page_title.lower() and "duckduckgo" not in page_url.lower():
-                raise RuntimeError(f"❌ Wrong page loaded. Expected DuckDuckGo, got: {page_title}")
+            if "duckduckgo" not in page_info['title'].lower() and "duckduckgo" not in page_url.lower():
+                raise RuntimeError(f"❌ Wrong page loaded. Expected DuckDuckGo, got: {page_info['title']}")
             
-            # Try to recover by scrolling and waiting
+            # Quick recovery attempt
             print("🔄 Attempting page recovery...")
-            try:
-                driver.execute_script("window.scrollTo(0, 500);")
-                driver.execute_script("window.scrollTo(0, 0);")
-                
-                # Wait for any lazy-loaded content
-                WebDriverWait(driver, 10).until(
-                    lambda d: d.execute_script("return document.readyState") == "complete"
-                )
-                
-                # Final check for results
-                wait = WebDriverWait(driver, 5)
-                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "article, .result, [data-testid='result']")))
-                
-                print("✅ Page recovery successful")
-                return True
-                
-            except TimeoutException:
-                raise RuntimeError("❌ Could not find search results after recovery attempts")
-                
+            
+            # Single scroll to trigger any lazy loading
+            driver.execute_script("window.scrollTo(0, Math.min(500, document.body.scrollHeight));")
+            
+            # Wait for complete state
+            WebDriverWait(driver, 5).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            
+            # Quick check for results
+            WebDriverWait(driver, 3).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "article, .result, [data-testid='result']"))
+            )
+            
+            print("✅ Page recovery successful")
+            return True
+            
+        except TimeoutException:
+            raise RuntimeError("❌ Could not find search results after recovery attempts")
         except Exception as e:
             print(f"❌ Page handling error: {e}")
             raise
 
     def _click_more_results(self, driver, max_clicks: int) -> int:
-        """Enhanced more results clicking with better error handling."""
+        """Enhanced more results clicking with efficient waits instead of sleep."""
         pages_retrieved = 1
         wait = WebDriverWait(driver, 8)
         
@@ -311,6 +324,9 @@ class DuckDuckGoScraper:
         
         for i in range(max_clicks - 1):
             try:
+                # Store initial result count to detect new content
+                initial_results = len(driver.find_elements(By.CSS_SELECTOR, "article, .result, [data-testid='result']"))
+                
                 # Scroll gradually to trigger loading
                 driver.execute_script("""
                     const scrollHeight = document.body.scrollHeight;
@@ -319,9 +335,10 @@ class DuckDuckGoScraper:
                     window.scrollTo(0, Math.min(currentScroll + 800, targetScroll));
                 """)
                 
-                # Wait for page to stabilize
-                import time
-                time.sleep(2)
+                # Wait for page to stabilize using document ready state
+                WebDriverWait(driver, 5).until(
+                    lambda d: d.execute_script("return document.readyState") == "complete"
+                )
                 
                 # Try to find and click more results button
                 button_found = False
@@ -333,25 +350,33 @@ class DuckDuckGoScraper:
                             text = selector.split("':contains('")[1].split("')")[0]
                             tag = selector.split(':contains(')[0]
                             xpath = f"//{tag}[contains(text(), '{text}')]"
-                            element = driver.find_element(By.XPATH, xpath)
+                            element = WebDriverWait(driver, 2).until(
+                                EC.element_to_be_clickable((By.XPATH, xpath))
+                            )
                         else:
-                            element = driver.find_element(By.CSS_SELECTOR, selector)
+                            element = WebDriverWait(driver, 2).until(
+                                EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                            )
                         
                         if element and element.is_displayed():
                             # Scroll to element
                             driver.execute_script("arguments[0].scrollIntoView(true);", element)
-                            time.sleep(1)
                             
                             # Click using JavaScript for reliability
                             driver.execute_script("arguments[0].click();", element)
                             
-                            # Wait for new content
-                            time.sleep(3)
-                            
-                            button_found = True
-                            pages_retrieved += 1
-                            print(f"✅ Loaded page {pages_retrieved}")
-                            break
+                            # Wait for new content by checking result count increase
+                            try:
+                                WebDriverWait(driver, 10).until(
+                                    lambda d: len(d.find_elements(By.CSS_SELECTOR, "article, .result, [data-testid='result']")) > initial_results
+                                )
+                                button_found = True
+                                pages_retrieved += 1
+                                print(f"✅ Loaded page {pages_retrieved}")
+                                break
+                            except TimeoutException:
+                                print("⚠️ New content didn't load after clicking")
+                                continue
                             
                     except (NoSuchElementException, TimeoutException):
                         continue
