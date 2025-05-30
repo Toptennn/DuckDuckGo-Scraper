@@ -320,22 +320,34 @@ class DuckDuckGoScraper:
             print(f"❌ Page handling error: {e}")
             raise
 
-    def _click_more_results(self, driver, max_clicks: int) -> int:
-        """Enhanced more results clicking optimized for cloud environments."""
+    def _click_more_results(self, driver, max_clicks: int, progress_callback=None) -> int:
+        """Enhanced more results clicking with progress tracking."""
         pages_retrieved = 1
         consecutive_failures = 0
         max_consecutive_failures = 3
         
         print(f"🔄 Attempting to load {max_clicks} pages (Cloud optimized)...")
         
+        # Initial progress update
+        if progress_callback:
+            progress_callback(pages_retrieved, max_clicks, "Loaded initial page")
+        
         for i in range(max_clicks - 1):
             try:
+                # Update progress at start of each page attempt
+                if progress_callback:
+                    progress_callback(pages_retrieved, max_clicks, f"Loading page {pages_retrieved + 1}...")
+                
                 # Longer wait for cloud environments
                 cloud_timeout = 30 if os.getenv('STREAMLIT_SHARING') or os.getenv('STREAMLIT_CLOUD') else 20
                 wait = WebDriverWait(driver, cloud_timeout)
                 
                 # Store initial result count
                 initial_results = len(driver.find_elements(By.CSS_SELECTOR, "article, .result, [data-testid='result']"))
+                
+                # Update progress - scrolling
+                if progress_callback:
+                    progress_callback(pages_retrieved, max_clicks, f"Scrolling to find more results button...")
                 
                 # More conservative scrolling for cloud
                 driver.execute_script("""
@@ -355,6 +367,10 @@ class DuckDuckGoScraper:
                 
                 button_found = False
                 
+                # Update progress - finding button
+                if progress_callback:
+                    progress_callback(pages_retrieved, max_clicks, f"Looking for 'More results' button...")
+                
                 for selector in config.MORE_RESULTS_SELECTORS:
                     try:
                         if ':contains(' in selector:
@@ -366,11 +382,19 @@ class DuckDuckGoScraper:
                             element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, selector)))
                         
                         if element and element.is_displayed():
+                            # Update progress - clicking
+                            if progress_callback:
+                                progress_callback(pages_retrieved, max_clicks, f"Clicking 'More results' for page {pages_retrieved + 1}...")
+                            
                             # Scroll to element with animation
                             driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
                             
                             # Click using JavaScript
                             driver.execute_script("arguments[0].click();", element)
+                            
+                            # Update progress - waiting for content
+                            if progress_callback:
+                                progress_callback(pages_retrieved, max_clicks, f"Waiting for new content to load...")
                             
                             # Wait for new content with extended timeout for cloud
                             try:
@@ -381,10 +405,16 @@ class DuckDuckGoScraper:
                                 pages_retrieved += 1
                                 consecutive_failures = 0  # Reset failure counter
                                 print(f"✅ Loaded page {pages_retrieved}")
+                                
+                                # Update progress - success
+                                if progress_callback:
+                                    progress_callback(pages_retrieved, max_clicks, f"✅ Successfully loaded page {pages_retrieved}")
                                 break
                             except TimeoutException:
                                 print(f"⚠️ Timeout waiting for new content on page {i+2}")
                                 consecutive_failures += 1
+                                if progress_callback:
+                                    progress_callback(pages_retrieved, max_clicks, f"⚠️ Timeout loading page {pages_retrieved + 1}")
                                 continue
                                 
                     except (NoSuchElementException, TimeoutException):
@@ -396,22 +426,33 @@ class DuckDuckGoScraper:
                 if not button_found:
                     consecutive_failures += 1
                     print(f"🔚 No more results button found (attempt {consecutive_failures})")
+                    if progress_callback:
+                        progress_callback(pages_retrieved, max_clicks, f"🔚 No more results available (stopped at page {pages_retrieved})")
                     
                     # Exit early if too many consecutive failures
                     if consecutive_failures >= max_consecutive_failures:
                         print(f"❌ Stopping after {consecutive_failures} consecutive failures")
+                        if progress_callback:
+                            progress_callback(pages_retrieved, max_clicks, f"❌ Stopped after {consecutive_failures} consecutive failures")
                         break
                         
             except Exception as e:
                 consecutive_failures += 1
                 print(f"❌ Error loading page {i+2}: {e}")
+                if progress_callback:
+                    progress_callback(pages_retrieved, max_clicks, f"❌ Error loading page {i+2}: {str(e)[:50]}...")
                 
                 # Exit early if too many consecutive failures
                 if consecutive_failures >= max_consecutive_failures:
                     print(f"❌ Stopping after {consecutive_failures} consecutive failures")
+                    if progress_callback:
+                        progress_callback(pages_retrieved, max_clicks, f"❌ Stopped after {consecutive_failures} consecutive failures")
                     break
         
         print(f"📊 Successfully loaded {pages_retrieved} pages")
+        if progress_callback:
+            progress_callback(pages_retrieved, max_clicks, f"🎉 Completed! Loaded {pages_retrieved} pages total")
+        
         return pages_retrieved
 
     def _parse_results(self, html: str) -> list:
@@ -514,14 +555,15 @@ class DuckDuckGoScraper:
         print(f"📊 Fallback extraction found {len(results)} results")
         return results
 
-    def scrape(self, query: str, max_pages: int, headless: bool = True) -> tuple[pd.DataFrame, int]:
+    def scrape(self, query: str, max_pages: int, headless: bool = True, progress_callback=None) -> tuple[pd.DataFrame, int]:
         """
-        Enhanced scraping with better error handling and recovery.
+        Enhanced scraping with progress tracking.
         
         Args:
             query: Search query string
             max_pages: Maximum number of pages to retrieve
             headless: Whether to run browser in headless mode
+            progress_callback: Function to call with progress updates (current_page, max_pages, status_message)
             
         Returns:
             Tuple of (DataFrame with results, number of pages retrieved)
@@ -531,44 +573,72 @@ class DuckDuckGoScraper:
         
         print(f"🔍 Starting scrape for: '{query}' (max {max_pages} pages)")
         
+        if progress_callback:
+            progress_callback(0, max_pages, "🚀 Starting browser...")
+        
         url = f"https://duckduckgo.com/?q={quote_plus(query)}&t=h_"
         driver = None
         
         try:
             # Setup driver
+            if progress_callback:
+                progress_callback(0, max_pages, "🔧 Setting up Chrome driver...")
+            
             driver = self._setup_driver(headless)
             print("✅ Driver setup complete")
             
             # Navigate to DuckDuckGo
+            if progress_callback:
+                progress_callback(0, max_pages, "🌐 Loading DuckDuckGo homepage...")
+            
             print("🌐 Loading DuckDuckGo homepage...")
             driver.get("https://duckduckgo.com/")
             
             # Wait for search box
+            if progress_callback:
+                progress_callback(0, max_pages, "⏳ Waiting for homepage to load...")
+            
             wait = WebDriverWait(driver, 15)
             wait.until(EC.presence_of_element_located((By.ID, "searchbox_input")))
             print("✅ Homepage loaded")
             
             # Navigate to search results
+            if progress_callback:
+                progress_callback(0, max_pages, f"🔍 Searching for: {query[:50]}...")
+            
             print(f"🔍 Searching for: {query}")
             driver.get(url)
             
             # Wait for results with multiple fallbacks
+            if progress_callback:
+                progress_callback(1, max_pages, "⏳ Loading initial search results...")
+            
             print("⏳ Waiting for search results...")
             if not self._wait_for_results(driver):
+                if progress_callback:
+                    progress_callback(1, max_pages, "🔄 Recovery mode - reloading page...")
                 print("⚠️ Initial result loading failed, trying recovery...")
                 self._handle_page_not_loaded(driver)
             
             print("✅ Search results loaded")
             
             # Load additional pages
-            pages_retrieved = self._click_more_results(driver, max_pages)
+            if progress_callback:
+                progress_callback(1, max_pages, "✅ Initial page loaded, loading more pages...")
+            
+            pages_retrieved = self._click_more_results(driver, max_pages, progress_callback)
             
             # Get final HTML
+            if progress_callback:
+                progress_callback(pages_retrieved, max_pages, "📄 Extracting and parsing results...")
+            
             print("📄 Extracting page content...")
             html = driver.page_source
             
         except Exception as e:
             print(f"❌ Scraping error: {e}")
+            if progress_callback:
+                progress_callback(0, max_pages, f"❌ Error: {str(e)[:50]}...")
             raise
         finally:
             if driver:
@@ -584,5 +654,8 @@ class DuckDuckGoScraper:
         
         df = pd.DataFrame(results)
         print(f"✅ Scraping complete: {len(df)} results from {pages_retrieved} pages")
+        
+        if progress_callback:
+            progress_callback(pages_retrieved, max_pages, f"🎉 Complete! Found {len(df)} results from {pages_retrieved} pages")
         
         return df, pages_retrieved

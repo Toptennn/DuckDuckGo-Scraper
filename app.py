@@ -91,7 +91,7 @@ def display_results(df, pages_retrieved):
             )
 
 def main():
-    """Main Streamlit application."""
+    """Main Streamlit application with progress tracking."""
     st.set_page_config(page_title="🦆 DuckDuckGo Scraper", layout="wide")
     st.title("🦆 DuckDuckGo Advanced Scraper")
     st.markdown("กรุณากรอกคำค้นหาและตั้งค่าต่าง ๆ จากนั้นคลิก Search เพื่อดูผลลัพธ์")
@@ -106,6 +106,7 @@ def main():
     if 'final_query_used' not in st.session_state:
         st.session_state.final_query_used = ""
 
+    # ...existing sidebar and input code remains the same...
     # Sidebar configuration
     st.sidebar.header("การตั้งค่า Scraper")
     max_pages = st.sidebar.number_input(
@@ -229,17 +230,68 @@ def main():
 
         scraper = DuckDuckGoScraper()
         
-        with st.spinner("กำลังค้นหา... กรุณารอสักครู่"):
-            try:
-                df, pages_retrieved = scraper.scrape(final_query, max_pages, headless=True)
-                st.session_state.search_results = df
-                st.session_state.pages_retrieved = pages_retrieved
-                st.session_state.last_query = final_query
-                st.session_state.final_query_used = final_query
-            except Exception as e:
-                st.error(f"เกิดข้อผิดพลาดระหว่างการสแครป: {str(e)}")
-                display_error_suggestions()
-                return
+        # Create progress tracking containers
+        progress_container = st.container()
+        
+        with progress_container:
+            # Progress bar
+            progress_bar = st.progress(0)
+            
+            # Status text
+            status_text = st.empty()
+            
+            # Progress details
+            progress_details = st.empty()
+            
+            # Progress callback function
+            def update_progress(current_page, max_pages, status_message):
+                # Calculate progress percentage
+                if max_pages > 0:
+                    progress = min(current_page / max_pages, 1.0)
+                else:
+                    progress = 0
+                
+                # Update progress bar
+                progress_bar.progress(progress)
+                
+                # Update status text
+                status_text.info(f"📄 หน้า {current_page}/{max_pages} - {status_message}")
+                
+                # Update detailed progress
+                with progress_details.container():
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("หน้าปัจจุบัน", current_page)
+                    with col2:
+                        st.metric("หน้าทั้งหมด", max_pages)
+                    with col3:
+                        st.metric("เปอร์เซ็นต์", f"{progress * 100:.1f}%")
+                
+                # Force update the display
+                time.sleep(0.1)
+        
+        try:
+            df, pages_retrieved = scraper.scrape(
+                final_query, 
+                max_pages, 
+                headless=True, 
+                progress_callback=update_progress
+            )
+            
+            # Clear progress indicators
+            progress_container.empty()
+            
+            st.session_state.search_results = df
+            st.session_state.pages_retrieved = pages_retrieved
+            st.session_state.last_query = final_query
+            st.session_state.final_query_used = final_query
+            
+        except Exception as e:
+            # Clear progress indicators
+            progress_container.empty()
+            st.error(f"เกิดข้อผิดพลาดระหว่างการสแครป: {str(e)}")
+            display_error_suggestions()
+            return
 
     # Display results if they exist in session state
     if st.session_state.search_results is not None:
