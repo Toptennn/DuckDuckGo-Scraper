@@ -331,7 +331,7 @@ class DuckDuckGoScraper:
         for i in range(max_clicks - 1):
             try:
                 # Longer wait for cloud environments
-                cloud_timeout = 15 if os.getenv('STREAMLIT_SHARING') or os.getenv('STREAMLIT_CLOUD') else 8
+                cloud_timeout = 30 if os.getenv('STREAMLIT_SHARING') or os.getenv('STREAMLIT_CLOUD') else 20
                 wait = WebDriverWait(driver, cloud_timeout)
                 
                 # Store initial result count
@@ -346,7 +346,7 @@ class DuckDuckGoScraper:
                 """)
                 
                 # Wait longer for page stabilization in cloud
-                time.sleep(2 if os.getenv('STREAMLIT_SHARING') or os.getenv('STREAMLIT_CLOUD') else 1)
+                time.sleep(0.5 if os.getenv('STREAMLIT_SHARING') or os.getenv('STREAMLIT_CLOUD') else 0.3)
                 
                 # Wait for document ready with longer timeout
                 WebDriverWait(driver, cloud_timeout).until(
@@ -368,7 +368,6 @@ class DuckDuckGoScraper:
                         if element and element.is_displayed():
                             # Scroll to element with animation
                             driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
-                            time.sleep(1)  # Wait for scroll animation
                             
                             # Click using JavaScript
                             driver.execute_script("arguments[0].click();", element)
