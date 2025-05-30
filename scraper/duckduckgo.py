@@ -1,6 +1,7 @@
 import datetime
 import os
 from urllib.parse import quote_plus
+import time
 
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -106,9 +107,13 @@ class DuckDuckGoScraper:
         if not driver:
             raise RuntimeError(f"All Chrome setup methods failed. Last error: {last_error}")
         
-        # Set optimized timeouts
-        driver.set_page_load_timeout(20)  # Reduced from 30
-        driver.implicitly_wait(5)  # Reduced from 10
+        # Set cloud-optimized timeouts
+        if os.getenv('STREAMLIT_SHARING') or os.getenv('STREAMLIT_CLOUD'):
+            driver.set_page_load_timeout(60)  # Increased for cloud
+            driver.implicitly_wait(10)  # Increased for cloud
+        else:
+            driver.set_page_load_timeout(20)
+            driver.implicitly_wait(5)
         
         # Apply stealth settings
         try:
@@ -316,68 +321,73 @@ class DuckDuckGoScraper:
             raise
 
     def _click_more_results(self, driver, max_clicks: int) -> int:
-        """Enhanced more results clicking with efficient waits instead of sleep."""
+        """Enhanced more results clicking optimized for cloud environments."""
         pages_retrieved = 1
-        wait = WebDriverWait(driver, 8)
+        consecutive_failures = 0
+        max_consecutive_failures = 3
         
-        print(f"🔄 Attempting to load {max_clicks} pages...")
+        print(f"🔄 Attempting to load {max_clicks} pages (Cloud optimized)...")
         
         for i in range(max_clicks - 1):
             try:
-                # Store initial result count to detect new content
+                # Longer wait for cloud environments
+                cloud_timeout = 15 if os.getenv('STREAMLIT_SHARING') or os.getenv('STREAMLIT_CLOUD') else 8
+                wait = WebDriverWait(driver, cloud_timeout)
+                
+                # Store initial result count
                 initial_results = len(driver.find_elements(By.CSS_SELECTOR, "article, .result, [data-testid='result']"))
                 
-                # Scroll gradually to trigger loading
+                # More conservative scrolling for cloud
                 driver.execute_script("""
-                    const scrollHeight = document.body.scrollHeight;
-                    const currentScroll = window.pageYOffset;
-                    const targetScroll = scrollHeight - window.innerHeight;
-                    window.scrollTo(0, Math.min(currentScroll + 800, targetScroll));
+                    window.scrollTo({
+                        top: document.body.scrollHeight - window.innerHeight,
+                        behavior: 'smooth'
+                    });
                 """)
                 
-                # Wait for page to stabilize using document ready state
-                WebDriverWait(driver, 5).until(
+                # Wait longer for page stabilization in cloud
+                time.sleep(2 if os.getenv('STREAMLIT_SHARING') or os.getenv('STREAMLIT_CLOUD') else 1)
+                
+                # Wait for document ready with longer timeout
+                WebDriverWait(driver, cloud_timeout).until(
                     lambda d: d.execute_script("return document.readyState") == "complete"
                 )
                 
-                # Try to find and click more results button
                 button_found = False
                 
                 for selector in config.MORE_RESULTS_SELECTORS:
                     try:
                         if ':contains(' in selector:
-                            # Handle XPath conversion
                             text = selector.split("':contains('")[1].split("')")[0]
                             tag = selector.split(':contains(')[0]
                             xpath = f"//{tag}[contains(text(), '{text}')]"
-                            element = WebDriverWait(driver, 2).until(
-                                EC.element_to_be_clickable((By.XPATH, xpath))
-                            )
+                            element = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
                         else:
-                            element = WebDriverWait(driver, 2).until(
-                                EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
-                            )
+                            element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, selector)))
                         
                         if element and element.is_displayed():
-                            # Scroll to element
-                            driver.execute_script("arguments[0].scrollIntoView(true);", element)
+                            # Scroll to element with animation
+                            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
+                            time.sleep(1)  # Wait for scroll animation
                             
-                            # Click using JavaScript for reliability
+                            # Click using JavaScript
                             driver.execute_script("arguments[0].click();", element)
                             
-                            # Wait for new content by checking result count increase
+                            # Wait for new content with extended timeout for cloud
                             try:
-                                WebDriverWait(driver, 10).until(
+                                WebDriverWait(driver, cloud_timeout * 2).until(
                                     lambda d: len(d.find_elements(By.CSS_SELECTOR, "article, .result, [data-testid='result']")) > initial_results
                                 )
                                 button_found = True
                                 pages_retrieved += 1
+                                consecutive_failures = 0  # Reset failure counter
                                 print(f"✅ Loaded page {pages_retrieved}")
                                 break
                             except TimeoutException:
-                                print("⚠️ New content didn't load after clicking")
+                                print(f"⚠️ Timeout waiting for new content on page {i+2}")
+                                consecutive_failures += 1
                                 continue
-                            
+                                
                     except (NoSuchElementException, TimeoutException):
                         continue
                     except Exception as e:
@@ -385,12 +395,22 @@ class DuckDuckGoScraper:
                         continue
                 
                 if not button_found:
-                    print(f"🔚 No more results button found after {pages_retrieved} pages")
-                    break
+                    consecutive_failures += 1
+                    print(f"🔚 No more results button found (attempt {consecutive_failures})")
                     
+                    # Exit early if too many consecutive failures
+                    if consecutive_failures >= max_consecutive_failures:
+                        print(f"❌ Stopping after {consecutive_failures} consecutive failures")
+                        break
+                        
             except Exception as e:
+                consecutive_failures += 1
                 print(f"❌ Error loading page {i+2}: {e}")
-                break
+                
+                # Exit early if too many consecutive failures
+                if consecutive_failures >= max_consecutive_failures:
+                    print(f"❌ Stopping after {consecutive_failures} consecutive failures")
+                    break
         
         print(f"📊 Successfully loaded {pages_retrieved} pages")
         return pages_retrieved

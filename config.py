@@ -54,7 +54,13 @@ if os.getenv('STREAMLIT_SHARING') or os.getenv('STREAMLIT_CLOUD'):
         '--no-zygote',
         '--disable-gpu-sandbox',
         '--disable-software-rasterizer',
-        '--disable-dev-shm-usage'
+        '--disable-dev-shm-usage',
+        '--memory-pressure-off',
+        '--max_old_space_size=2048',  # Reduced memory
+        '--js-flags="--max-old-space-size=2048"',
+        '--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding',
+        '--disable-backgrounding-occluded-windows'
     ])
 
 # Enhanced result selectors for better compatibility
