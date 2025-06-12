@@ -2,6 +2,7 @@ import datetime
 import os
 from urllib.parse import quote_plus
 import time
+import re
 
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -455,8 +456,261 @@ class DuckDuckGoScraper:
         
         return pages_retrieved
 
+    def _find_title_link(self, article):
+        """Find title link with enhanced selector support."""
+        for selector in config.LINK_SELECTORS:
+            try:
+                link = article.select_one(selector)
+                if link and link.get('href'):
+                    return link
+            except Exception:
+                continue
+        return None
+
+    def _extract_fallback_links(self, soup) -> list:
+        """Enhanced fallback link extraction."""
+        results = []
+        print("🔄 Using fallback link extraction...")
+        
+        # Find all links
+        all_links = soup.find_all('a', href=True)
+        print(f"🔍 Found {len(all_links)} total links")
+        
+        for link in all_links:
+            try:
+                href = link.get('href', '')
+                title = link.get_text(strip=True)
+                
+                # Enhanced filtering
+                if (title and len(title) > 10 and len(title) < 200 and
+                    not href.startswith(('/', '#', 'javascript:', 'mailto:')) and
+                    'duckduckgo.com' not in href and
+                    any(protocol in href for protocol in ['http://', 'https://']) and
+                    not any(skip in href.lower() for skip in ['facebook.com', 'twitter.com', 'linkedin.com'])):
+                    
+                    # Try to find date in the parent or nearby elements
+                    published_date = None
+                    try:
+                        # Look for date in parent elements
+                        parent = link.parent
+                        if parent:
+                            published_date = self._extract_published_date(parent)
+                    except:
+                        pass
+                    
+                    results.append({
+                        "title": title,
+                        "url": href,
+                        "published_date": published_date,
+                        "scraped_at": self.scrape_time
+                    })
+                    
+            except Exception as e:
+                continue
+        
+        print(f"📊 Fallback extraction found {len(results)} results")
+        return results
+
+    def _extract_published_date(self, article):
+        """Extract published date from article with English date handling."""
+        try:
+            # Debug: Print the article HTML to see what we're working with
+            # print(f"🔍 Article HTML snippet: {str(article)[:500]}...")
+            
+            date_span = None
+            date_text = None
+            
+            # Primary selector - the exact class from your example
+            date_span = article.select_one("span.MILR5XIVy9h75WrLvKiq.qsXMqKZNYEaWqGnWVdoa")
+            if date_span:
+                date_text = date_span.get_text(strip=True)
+                print(f"✅ Found date with primary selector: '{date_text}'")
+            
+            if not date_span or not date_text:
+                # Enhanced fallback selectors - more comprehensive search
+                date_selectors = [
+                    # Class-based selectors
+                    "span[class*='MILR5XIVy9h75WrLvKiq']",
+                    "span[class*='qsXMqKZNYEaWqGnWVdoa']",
+                    "span[class*='date']",
+                    "span[class*='time']",
+                    "span[class*='published']",
+                    "span[class*='timestamp']",
+                    
+                    # Generic time/date elements
+                    "time",
+                    "time[datetime]",
+                    
+                    # Common class names
+                    ".date",
+                    ".published",
+                    ".timestamp",
+                    ".publish-date",
+                    ".post-date",
+                    ".article-date",
+                ]
+                
+                for selector in date_selectors:
+                    try:
+                        date_span = article.select_one(selector)
+                        if date_span:
+                            date_text = date_span.get_text(strip=True)
+                            if date_text:
+                                print(f"✅ Found date with fallback selector '{selector}': '{date_text}'")
+                                break
+                    except Exception as e:
+                        # Continue to next selector if this one fails
+                        continue
+            
+            if not date_text:
+                # Last resort: search for any text that looks like an English date in the entire article
+                article_text = article.get_text()
+                
+                # Look for English date patterns in the text
+                import re
+                
+                # Pattern for dates like "Mar 19, 2025" or "March 19, 2025"
+                english_date_pattern = r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b'
+                matches = re.findall(english_date_pattern, article_text)
+                if matches:
+                    date_text = matches[0].strip()
+                    print(f"✅ Found date with regex pattern: '{date_text}'")
+                
+                # Pattern for "Today"
+                elif 'Today' in article_text:
+                    date_text = 'Today'
+                    print(f"✅ Found 'Today' in article text")
+                
+                # Pattern for "x days ago" or "x day ago"
+                else:
+                    days_ago_pattern = r'\b\d+\s+days?\s+ago\b'
+                    matches = re.findall(days_ago_pattern, article_text)
+                    if matches:
+                        date_text = matches[0].strip()
+                        print(f"✅ Found days ago pattern: '{date_text}'")
+            
+            if not date_text:
+                print("⚠️ No date found in article")
+                return None
+            
+            # Parse the found date text
+            parsed_date = self._parse_english_date(date_text)
+            if parsed_date:
+                print(f"✅ Successfully parsed date: '{date_text}' -> '{parsed_date}'")
+            else:
+                print(f"⚠️ Failed to parse date: '{date_text}'")
+            
+            return parsed_date
+            
+        except Exception as e:
+            print(f"⚠️ Error extracting date: {e}")
+            return None
+
+    def _parse_english_date(self, date_text: str):
+        """Parse English date text and convert to ISO format."""
+        try:
+            current_date = datetime.datetime.now()
+            
+            # Clean up the date text
+            date_text = date_text.strip()
+            print(f"🔍 Parsing date text: '{date_text}'")
+            
+            # Handle "Today"
+            if "Today" in date_text or "today" in date_text:
+                result = current_date.date().isoformat()
+                print(f"✅ Parsed 'Today' as: {result}")
+                return result
+            
+            # Handle "x days ago" or "x day ago"
+            days_ago_pattern = r'(\d+)\s+days?\s+ago'
+            match = re.search(days_ago_pattern, date_text, re.IGNORECASE)
+            if match:
+                days_ago = int(match.group(1))
+                target_date = current_date - datetime.timedelta(days=days_ago)
+                result = target_date.date().isoformat()
+                print(f"✅ Parsed '{days_ago} days ago' as: {result}")
+                return result
+            
+            # Handle "Yesterday"
+            if "Yesterday" in date_text or "yesterday" in date_text:
+                target_date = current_date - datetime.timedelta(days=1)
+                result = target_date.date().isoformat()
+                print(f"✅ Parsed 'Yesterday' as: {result}")
+                return result
+            
+            # Month name mapping (both abbreviated and full)
+            month_mapping = {
+                'jan': 1, 'january': 1,
+                'feb': 2, 'february': 2,
+                'mar': 3, 'march': 3,
+                'apr': 4, 'april': 4,
+                'may': 5,
+                'jun': 6, 'june': 6,
+                'jul': 7, 'july': 7,
+                'aug': 8, 'august': 8,
+                'sep': 9, 'september': 9,
+                'oct': 10, 'october': 10,
+                'nov': 11, 'november': 11,
+                'dec': 12, 'december': 12
+            }
+            
+            # Parse English date formats like "Mar 19, 2025" or "March 19, 2025"
+            # Pattern with optional comma
+            english_date_pattern = r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})'
+            match = re.search(english_date_pattern, date_text, re.IGNORECASE)
+            if match:
+                month_name = match.group(1).lower()
+                day = int(match.group(2))
+                year = int(match.group(3))
+                
+                print(f"🔍 Extracted: month='{month_name}', day={day}, year={year}")
+                
+                # Find month number
+                month_num = month_mapping.get(month_name)
+                
+                if month_num:
+                    try:
+                        parsed_date = datetime.date(year, month_num, day)
+                        result = parsed_date.isoformat()
+                        print(f"✅ Successfully created date: {day}/{month_num}/{year} = {result}")
+                        return result
+                    except ValueError as e:
+                        print(f"⚠️ Invalid date: {day}/{month_num}/{year} - {e}")
+                        return None
+                else:
+                    print(f"⚠️ Could not match English month: '{month_name}'")
+            
+            # Try parsing other common date formats using strptime
+            date_formats = [
+                '%B %d, %Y',    # March 19, 2025
+                '%b %d, %Y',    # Mar 19, 2025
+                '%B %d %Y',     # March 19 2025
+                '%b %d %Y',     # Mar 19 2025
+                '%Y-%m-%d',     # 2025-03-19
+                '%m/%d/%Y',     # 03/19/2025
+                '%d/%m/%Y',     # 19/03/2025
+                '%Y/%m/%d',     # 2025/03/19
+            ]
+            
+            for date_format in date_formats:
+                try:
+                    parsed_date = datetime.datetime.strptime(date_text, date_format).date()
+                    result = parsed_date.isoformat()
+                    print(f"✅ Parsed with format '{date_format}': {result}")
+                    return result
+                except ValueError:
+                    continue
+            
+            # If no pattern matches, return None
+            print(f"⚠️ No matching pattern found for: '{date_text}'")
+            return None
+            
+        except Exception as e:
+            print(f"⚠️ Error parsing English date '{date_text}': {e}")
+            return None
+    
     def _parse_results(self, html: str) -> list:
-        """Enhanced result parsing with better error handling."""
+        """Enhanced result parsing with date extraction."""
         soup = BeautifulSoup(html, "html.parser")
         results = []
         
@@ -498,9 +752,13 @@ class DuckDuckGoScraper:
                         elif href.startswith('/'):
                             href = 'https://duckduckgo.com' + href
                         
+                        # Extract published date
+                        published_date = self._extract_published_date(article)
+                        
                         results.append({
                             "title": title,
                             "url": href,
+                            "published_date": published_date,
                             "scraped_at": self.scrape_time
                         })
                         
@@ -511,59 +769,17 @@ class DuckDuckGoScraper:
         print(f"📊 Successfully parsed {len(results)} results")
         return results
 
-    def _find_title_link(self, article):
-        """Find title link with enhanced selector support."""
-        for selector in config.LINK_SELECTORS:
-            try:
-                link = article.select_one(selector)
-                if link and link.get('href'):
-                    return link
-            except Exception:
-                continue
-        return None
-
-    def _extract_fallback_links(self, soup) -> list:
-        """Enhanced fallback link extraction."""
-        results = []
-        print("🔄 Using fallback link extraction...")
-        
-        # Find all links
-        all_links = soup.find_all('a', href=True)
-        print(f"🔍 Found {len(all_links)} total links")
-        
-        for link in all_links:
-            try:
-                href = link.get('href', '')
-                title = link.get_text(strip=True)
-                
-                # Enhanced filtering
-                if (title and len(title) > 10 and len(title) < 200 and
-                    not href.startswith(('/', '#', 'javascript:', 'mailto:')) and
-                    'duckduckgo.com' not in href and
-                    any(protocol in href for protocol in ['http://', 'https://']) and
-                    not any(skip in href.lower() for skip in ['facebook.com', 'twitter.com', 'linkedin.com'])):
-                    
-                    results.append({
-                        "title": title,
-                        "url": href,
-                        "scraped_at": self.scrape_time
-                    })
-                    
-            except Exception as e:
-                continue
-        
-        print(f"📊 Fallback extraction found {len(results)} results")
-        return results
-
-    def scrape(self, query: str, max_pages: int, headless: bool = True, progress_callback=None) -> tuple[pd.DataFrame, int]:
+    def scrape(self, query: str, max_pages: int, headless: bool = True, progress_callback=None, start_date=None, end_date=None) -> tuple[pd.DataFrame, int]:
         """
-        Enhanced scraping with progress tracking.
+        Enhanced scraping with progress tracking and date range support.
         
         Args:
             query: Search query string
             max_pages: Maximum number of pages to retrieve
             headless: Whether to run browser in headless mode
-            progress_callback: Function to call with progress updates (current_page, max_pages, status_message)
+            progress_callback: Function to call with progress updates
+            start_date: Start date for search range (YYYY-MM-DD format)
+            end_date: End date for search range (YYYY-MM-DD format)
             
         Returns:
             Tuple of (DataFrame with results, number of pages retrieved)
@@ -576,7 +792,21 @@ class DuckDuckGoScraper:
         if progress_callback:
             progress_callback(0, max_pages, "🚀 Starting browser...")
         
+        # Build URL with optional date range
         url = f"https://duckduckgo.com/?q={quote_plus(query)}&t=h_"
+        
+        # Add date range if provided
+        if start_date and end_date:
+            # Validate date format
+            try:
+                datetime.datetime.strptime(start_date, '%Y-%m-%d')
+                datetime.datetime.strptime(end_date, '%Y-%m-%d')
+                url += f"&df={start_date}..{end_date}&ia=web"
+                print(f"📅 Date range filter: {start_date} to {end_date}")
+            except ValueError as e:
+                print(f"⚠️ Invalid date format: {e}. Expected YYYY-MM-DD")
+                raise ValueError("Date format must be YYYY-MM-DD")
+        
         driver = None
         
         try:
@@ -607,6 +837,7 @@ class DuckDuckGoScraper:
                 progress_callback(0, max_pages, f"🔍 Searching for: {query[:50]}...")
             
             print(f"🔍 Searching for: {query}")
+            print(f"🔗 URL: {url}")
             driver.get(url)
             
             # Wait for results with multiple fallbacks

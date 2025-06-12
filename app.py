@@ -2,6 +2,7 @@ import time
 import streamlit as st
 import asyncio
 import sys
+import datetime
 if sys.platform.startswith("win"):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
@@ -120,6 +121,34 @@ def main():
     if max_pages > 100:
         st.sidebar.warning("⚠️ จำนวนหน้ามาก อาจใช้เวลานานในการดาวน์โหลด")
 
+    # Date range filter in sidebar
+    st.sidebar.header("📅 กรองตามวันที่")
+    use_date_filter = st.sidebar.checkbox("เปิดใช้งานกรองวันที่", help="จำกัดผลลัพธ์ตามช่วงวันที่ที่กำหนด")
+    
+    start_date = None
+    end_date = None
+    
+    if use_date_filter:
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            start_date = st.date_input(
+                "วันที่เริ่มต้น:",
+                value=datetime.date.today() - datetime.timedelta(days=30),
+                help="วันที่เริ่มต้นของช่วงเวลาที่ต้องการค้นหา"
+            )
+        with col2:
+            end_date = st.date_input(
+                "วันที่สิ้นสุด:",
+                value=datetime.date.today(),
+                help="วันที่สิ้นสุดของช่วงเวลาที่ต้องการค้นหา"
+            )
+        
+        if start_date and end_date:
+            if start_date > end_date:
+                st.sidebar.error("❌ วันที่เริ่มต้นต้องไม่เกินวันที่สิ้นสุด")
+            else:
+                st.sidebar.success(f"📅 ช่วงวันที่: {start_date} ถึง {end_date}")
+
     # Main search inputs
     st.header("🔍 ประเภทการค้นหา")
     
@@ -213,19 +242,27 @@ def main():
     
     # Display the constructed query
     if final_query:
-        st.info(f"**คำค้นหาที่จะใช้:** `{final_query}`")
+        query_display = f"**คำค้นหาที่จะใช้:** `{final_query}`"
+        if use_date_filter and start_date and end_date:
+            query_display += f"\n📅 **ช่วงวันที่:** {start_date} ถึง {end_date}"
+        st.info(query_display)
     
     # Validation
     has_any_query = any([normal_query.strip(), exact_phrase.strip(), semantic_query.strip()])
     
     # Clear previous results if query changed
-    if final_query != st.session_state.last_query and final_query.strip():
+    query_key = f"{final_query}_{start_date}_{end_date}" if use_date_filter else final_query
+    if query_key != st.session_state.last_query and final_query.strip():
         st.session_state.search_results = None
         st.session_state.pages_retrieved = 0
     
     if st.button("Search", type="primary"):
         if not has_any_query:
             st.error("กรุณาใส่คำค้นหาอย่างน้อย 1 ประเภทก่อนคลิก Search")
+            return
+        
+        if use_date_filter and start_date and end_date and start_date > end_date:
+            st.error("❌ วันที่เริ่มต้นต้องไม่เกินวันที่สิ้นสุด")
             return
 
         scraper = DuckDuckGoScraper()
@@ -271,11 +308,17 @@ def main():
                 time.sleep(0.1)
         
         try:
+            # Convert dates to string format if date filter is enabled
+            start_date_str = start_date.strftime('%Y-%m-%d') if use_date_filter and start_date else None
+            end_date_str = end_date.strftime('%Y-%m-%d') if use_date_filter and end_date else None
+            
             df, pages_retrieved = scraper.scrape(
                 final_query, 
                 max_pages, 
                 headless=True, 
-                progress_callback=update_progress
+                progress_callback=update_progress,
+                start_date=start_date_str,
+                end_date=end_date_str
             )
             
             # Clear progress indicators
@@ -283,7 +326,7 @@ def main():
             
             st.session_state.search_results = df
             st.session_state.pages_retrieved = pages_retrieved
-            st.session_state.last_query = final_query
+            st.session_state.last_query = query_key
             st.session_state.final_query_used = final_query
             
         except Exception as e:
