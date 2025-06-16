@@ -22,7 +22,9 @@ class DuckDuckGoScraper:
     """DuckDuckGo search results scraper using Selenium."""
 
     def __init__(self):
-        self.scrape_time = datetime.datetime.now().isoformat()
+        # This constructor is intentionally left empty because
+        # all configuration and setup are handled in other methods.
+        pass
 
     def _setup_driver(self, headless: bool = True):
         """Setup and configure Chrome driver with performance optimizations."""
@@ -335,6 +337,13 @@ class DuckDuckGoScraper:
         
         for i in range(max_clicks - 1):
             try:
+                # Stop if "No more results found for" appears anywhere on the page
+                if driver.execute_script("return document.body.innerText.includes('No more results found for');"):
+                    print("🛑 No more results found message detected.")
+                    if progress_callback:
+                        progress_callback(pages_retrieved, max_clicks, "🛑 No more results found, stopping pagination.")
+                    break
+
                 # Update progress at start of each page attempt
                 if progress_callback:
                     progress_callback(pages_retrieved, max_clicks, f"Loading page {pages_retrieved + 1}...")
@@ -501,8 +510,7 @@ class DuckDuckGoScraper:
                     results.append({
                         "title": title,
                         "url": href,
-                        "published_date": published_date,
-                        "scraped_at": self.scrape_time
+                        "published_date": published_date
                     })
                     
             except Exception as e:
@@ -758,8 +766,7 @@ class DuckDuckGoScraper:
                         results.append({
                             "title": title,
                             "url": href,
-                            "published_date": published_date,
-                            "scraped_at": self.scrape_time
+                            "published_date": published_date
                         })
                         
             except Exception as e:
