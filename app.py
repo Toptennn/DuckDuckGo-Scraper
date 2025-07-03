@@ -157,21 +157,21 @@ def main():
     with col1:
         normal_query = st.text_input(
             "คำค้นหาทั่วไป:",
-            placeholder="เช่น artificial intelligence",
-            help="การค้นหาปกติ - ผลลัพธ์เกี่ยวกับคำใดคำหนึ่ง"
+            placeholder="cats dogs",
+            help="ใส่คำธรรมดาคั่นด้วยเว้นวรรค ⇒ ผลลัพธ์ที่มีคำใดคำหนึ่งก็ได้ (เทียบกับ OR)"
         )
         
         semantic_query = st.text_input(
             "ค้นหาแบบ Semantic (~):",
-            placeholder="เช่น machine learning",
-            help="ค้นหาผลลัพธ์ที่มีความหมายคล้ายกัน"
+            placeholder="~\"cats and dogs\"",
+            help="DuckDuckGo จะพยายามหาคำหรือวลีที่ ความหมายใกล้เคียง (เช่น “dogs and cats”) — ยังอยู่ในสถานะ experimental"
         )
     
     with col2:
         exact_phrase = st.text_input(
             "คำค้นหาแม่นยำ (\"):",
-            placeholder="เช่น data science",
-            help="ค้นหาวลีที่ตรงกันแน่นอน"
+            placeholder="\"cats and dogs\"",
+            help="ใส่ได้ทีละวลี (ไม่ต้องพิมพ์เครื่องหมายเอง) ⇒ ค้นหาประโยคตรงตัวทั้งชุด"
         )
 
     # Advanced search options in sidebar
@@ -180,14 +180,14 @@ def main():
     # Include/Exclude terms
     include_terms = st.sidebar.text_input(
         "คำที่ต้องการเน้น (+):",
-        placeholder="python, tutorial",
-        help="คำที่คั่นด้วยคอมม่า เพื่อเน้นในผลลัพธ์"
+        placeholder="dogs",
+        help="บอกให้ DDG “ให้ความสำคัญ” กับคำนี้มากขึ้น แต่ ไม่รับประกัน ว่าต้องมีทุกผลลัพธ์"
     )
     
     exclude_terms = st.sidebar.text_input(
         "คำที่ต้องการยกเว้น (-):",
-        placeholder="basic, beginner",
-        help="คำที่คั่นด้วยคอมม่า เพื่อยกเว้นจากผลลัพธ์"
+        placeholder="dogs",
+        help="ตัดคำที่ไม่ต้องการออกจากผลลัพธ์"
     )
     
     # File type filter
@@ -200,27 +200,27 @@ def main():
     # Site filters
     site_include = st.sidebar.text_input(
         "เว็บไซต์เฉพาะ (site:):",
-        placeholder="arxiv.org",
-        help="ค้นหาเฉพาะในเว็บไซต์นี้"
+        placeholder="site:example.com",
+        help="หาภายในโดเมนนี้เท่านั้น"
     )
     
     site_exclude = st.sidebar.text_input(
         "ยกเว้นเว็บไซต์ (-site:):",
-        placeholder="wikipedia.org",
-        help="ยกเว้นเว็บไซต์นี้จากผลลัพธ์"
+        placeholder="site:example.com",
+        help="ตัดผลลัพธ์จากโดเมนนั้นออก"
     )
     
     # Title and URL filters
     intitle = st.sidebar.text_input(
         "ใน Title (intitle:):",
-        placeholder="research",
-        help="ค้นหาคำในหัวข้อหน้าเว็บ"
+        placeholder="dogs",
+        help="หน้าเว็บต้องมี dogs อยู่ใน <title> เท่านั้น"
     )
     
     inurl = st.sidebar.text_input(
         "ใน URL (inurl:):",
-        placeholder="blog",
-        help="ค้นหาคำใน URL ของหน้าเว็บ"
+        placeholder="cats",
+        help="URL ของหน้าเว็บต้องมีคำที่ระบุ"
     )
 
     # Build queries dict
