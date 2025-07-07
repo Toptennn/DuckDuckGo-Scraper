@@ -59,6 +59,44 @@
     @apply bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-900 dark:to-primary-800
            rounded-lg p-4 border border-primary-200 dark:border-primary-700;
   }
+
+  /* Table specific styles */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Responsive table */
+  @media (max-width: 768px) {
+    .table-responsive {
+      font-size: 0.875rem;
+    }
+    
+    .table-responsive th,
+    .table-responsive td {
+      padding: 0.5rem;
+    }
+  }
+
+  /* Export buttons */
+  .export-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 640px) {
+    .export-buttons {
+      width: 100%;
+      justify-content: stretch;
+    }
+    
+    .export-buttons button {
+      flex: 1;
+    }
+  }
 }
 
 .loading-spinner {

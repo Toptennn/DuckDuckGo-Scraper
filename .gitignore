@@ -300,3 +300,16 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# TypeScript build files
+*.tsbuildinfo
+.tsbuildinfo
+
+# IDE specific TypeScript files
+.vscode/settings.json
+.idea/typescript.xml
+
+# TypeScript declaration files (if auto-generated)
+*.d.ts
+!next-env.d.ts
+!types/**/*.d.ts

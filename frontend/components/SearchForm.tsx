@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, ChangeEvent, FormEvent } from 'react';
+import { SearchFormProps, SearchFormData } from '../types';
 
-export default function SearchForm({ onSubmit, loading }) {
-  const [form, setForm] = useState({
+const SearchForm: React.FC<SearchFormProps> = ({ onSubmit, loading }) => {
+  const [form, setForm] = useState<SearchFormData>({
     normal_query: '',
     exact_phrase: '',
     semantic_query: '',
@@ -17,18 +18,22 @@ export default function SearchForm({ onSubmit, loading }) {
     max_pages: 20
   });
 
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e: ChangeEvent<HTMLInputElement>): void => {
+    const { name, value } = e.target;
+    setForm(prev => ({ 
+      ...prev, 
+      [name]: name === 'max_pages' ? parseInt(value) || 20 : value 
+    }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
     onSubmit(form);
   };
 
-  const clearForm = () => {
+  const clearForm = (): void => {
     setForm({
       normal_query: '',
       exact_phrase: '',
@@ -61,7 +66,7 @@ export default function SearchForm({ onSubmit, loading }) {
         {/* Basic Search Fields */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="form-group">
-            <label className="form-label">
+            <label className="form-label" htmlFor="normal_query">
               <span className="flex items-center gap-2">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
@@ -70,6 +75,7 @@ export default function SearchForm({ onSubmit, loading }) {
               </span>
             </label>
             <input
+              id="normal_query"
               name="normal_query"
               placeholder="Enter your search terms..."
               value={form.normal_query}
@@ -79,7 +85,7 @@ export default function SearchForm({ onSubmit, loading }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">
+            <label className="form-label" htmlFor="exact_phrase">
               <span className="flex items-center gap-2">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
@@ -88,6 +94,7 @@ export default function SearchForm({ onSubmit, loading }) {
               </span>
             </label>
             <input
+              id="exact_phrase"
               name="exact_phrase"
               placeholder="Exact phrase to search for..."
               value={form.exact_phrase}
@@ -97,7 +104,7 @@ export default function SearchForm({ onSubmit, loading }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">
+            <label className="form-label" htmlFor="semantic_query">
               <span className="flex items-center gap-2">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -106,6 +113,7 @@ export default function SearchForm({ onSubmit, loading }) {
               </span>
             </label>
             <input
+              id="semantic_query"
               name="semantic_query"
               placeholder="Semantic search terms..."
               value={form.semantic_query}
@@ -115,7 +123,7 @@ export default function SearchForm({ onSubmit, loading }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">
+            <label className="form-label" htmlFor="include_terms">
               <span className="flex items-center gap-2">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
@@ -124,6 +132,7 @@ export default function SearchForm({ onSubmit, loading }) {
               </span>
             </label>
             <input
+              id="include_terms"
               name="include_terms"
               placeholder="Terms to include (comma-separated)..."
               value={form.include_terms}
@@ -151,8 +160,9 @@ export default function SearchForm({ onSubmit, loading }) {
           </button>
 
           <div className="flex items-center gap-2">
-            <label className="form-label mb-0">Max Pages:</label>
+            <label className="form-label mb-0" htmlFor="max_pages">Max Pages:</label>
             <input
+              id="max_pages"
               name="max_pages"
               type="number"
               min="1"
@@ -169,8 +179,9 @@ export default function SearchForm({ onSubmit, loading }) {
           <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700 fade-in">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="form-group">
-                <label className="form-label">Exclude Terms</label>
+                <label className="form-label" htmlFor="exclude_terms">Exclude Terms</label>
                 <input
+                  id="exclude_terms"
                   name="exclude_terms"
                   placeholder="Terms to exclude (comma-separated)..."
                   value={form.exclude_terms}
@@ -180,8 +191,9 @@ export default function SearchForm({ onSubmit, loading }) {
               </div>
 
               <div className="form-group">
-                <label className="form-label">File Type</label>
+                <label className="form-label" htmlFor="filetype">File Type</label>
                 <input
+                  id="filetype"
                   name="filetype"
                   placeholder="e.g., pdf, doc, txt..."
                   value={form.filetype}
@@ -191,8 +203,9 @@ export default function SearchForm({ onSubmit, loading }) {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Site Include</label>
+                <label className="form-label" htmlFor="site_include">Site Include</label>
                 <input
+                  id="site_include"
                   name="site_include"
                   placeholder="e.g., reddit.com, github.com..."
                   value={form.site_include}
@@ -202,8 +215,9 @@ export default function SearchForm({ onSubmit, loading }) {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Site Exclude</label>
+                <label className="form-label" htmlFor="site_exclude">Site Exclude</label>
                 <input
+                  id="site_exclude"
                   name="site_exclude"
                   placeholder="e.g., pinterest.com..."
                   value={form.site_exclude}
@@ -213,8 +227,9 @@ export default function SearchForm({ onSubmit, loading }) {
               </div>
 
               <div className="form-group">
-                <label className="form-label">In Title</label>
+                <label className="form-label" htmlFor="intitle">In Title</label>
                 <input
+                  id="intitle"
                   name="intitle"
                   placeholder="Text that must appear in title..."
                   value={form.intitle}
@@ -224,8 +239,9 @@ export default function SearchForm({ onSubmit, loading }) {
               </div>
 
               <div className="form-group">
-                <label className="form-label">In URL</label>
+                <label className="form-label" htmlFor="inurl">In URL</label>
                 <input
+                  id="inurl"
                   name="inurl"
                   placeholder="Text that must appear in URL..."
                   value={form.inurl}
@@ -235,8 +251,9 @@ export default function SearchForm({ onSubmit, loading }) {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Start Date</label>
+                <label className="form-label" htmlFor="start_date">Start Date</label>
                 <input
+                  id="start_date"
                   name="start_date"
                   type="date"
                   value={form.start_date}
@@ -246,8 +263,9 @@ export default function SearchForm({ onSubmit, loading }) {
               </div>
 
               <div className="form-group">
-                <label className="form-label">End Date</label>
+                <label className="form-label" htmlFor="end_date">End Date</label>
                 <input
+                  id="end_date"
                   name="end_date"
                   type="date"
                   value={form.end_date}
@@ -298,4 +316,6 @@ export default function SearchForm({ onSubmit, loading }) {
       </form>
     </div>
   );
-}
+};
+
+export default SearchForm;
