@@ -4,32 +4,40 @@ import Head from 'next/head';
 import ThemeToggle from '../components/ThemeToggle';
 import SearchForm from '../components/SearchForm';
 import SearchResults from '../components/SearchResults';
+import { SearchFormData, SearchResponse, SearchResult, SearchInfo } from '../types';
 
-export default function Home() {
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState([]);
-  const [error, setError] = useState(null);
-  const [searchInfo, setSearchInfo] = useState(null);
+const Home: React.FC = () => {
+  const [loading, setLoading] = useState<boolean>(false);
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [searchInfo, setSearchInfo] = useState<SearchInfo | null>(null);
 
-  const handleSearch = async (formData) => {
+  const handleSearch = async (formData: SearchFormData): Promise<void> => {
     setLoading(true);
     setError(null);
     setResults([]);
     setSearchInfo(null);
     
     try {
-      const res = await axios.post('http://127.0.0.1:8000/search', formData);
-      setResults(res.data.results);
+      const response = await axios.post<SearchResponse>('http://127.0.0.1:8000/search', formData);
+      const { data } = response;
+      
+      setResults(data.results);
       setSearchInfo({
-        query: res.data.query,
-        pages_retrieved: res.data.pages_retrieved,
-        total_results: res.data.results.length
+        query: data.query,
+        pages_retrieved: data.pages_retrieved,
+        total_results: data.results.length
       });
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.detail || 'An error occurred while searching');
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.detail || 'An error occurred while searching');
+      } else {
+        setError('An unexpected error occurred');
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -78,11 +86,11 @@ export default function Home() {
           {/* Welcome Section */}
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-              Powerful Search at Your Fingertips
+              Powerful Search with Advanced Data Export
             </h2>
             <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
               Use advanced search parameters to find exactly what you're looking for. 
-              Our tool leverages DuckDuckGo's search capabilities with enhanced filtering options.
+              View results in a modern table format with filtering, sorting, and export to CSV/Excel.
             </p>
           </div>
 
@@ -103,12 +111,12 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="text-center">
               <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Built with Next.js, FastAPI, and Tailwind CSS
+                Built with Next.js, TypeScript, FastAPI, and Tailwind CSS
               </p>
               <div className="flex justify-center gap-6 text-sm">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span className="text-gray-600 dark:text-gray-400">Frontend: Next.js</span>
+                  <span className="text-gray-600 dark:text-gray-400">Frontend: Next.js + TypeScript</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -116,7 +124,7 @@ export default function Home() {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                  <span className="text-gray-600 dark:text-gray-400">Scraping: Selenium</span>
+                  <span className="text-gray-600 dark:text-gray-400">Export: CSV/Excel</span>
                 </div>
               </div>
             </div>
@@ -125,4 +133,6 @@ export default function Home() {
       </div>
     </>
   );
-}
+};
+
+export default Home;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 
-export default function ThemeToggle() {
-  const [darkMode, setDarkMode] = useState(false);
+const ThemeToggle: React.FC = () => {
+  const [darkMode, setDarkMode] = useState<boolean>(false);
 
   useEffect(() => {
     const isDarkMode = localStorage.getItem('darkMode') === 'true';
@@ -13,7 +13,7 @@ export default function ThemeToggle() {
     }
   }, []);
 
-  const toggleDarkMode = () => {
+  const toggleDarkMode = (): void => {
     const newDarkMode = !darkMode;
     setDarkMode(newDarkMode);
     localStorage.setItem('darkMode', newDarkMode.toString());
@@ -42,4 +42,6 @@ export default function ThemeToggle() {
       )}
     </button>
   );
-}
+};
+
+export default ThemeToggle;
