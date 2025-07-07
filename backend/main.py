@@ -1,9 +1,19 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
-from scraper import DuckDuckGoScraper
+from backend.scraper.duckduckgo import DuckDuckGoScraper
 
 app = FastAPI(title="DuckDuckGo Scraper API")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001"],  # Next.js dev server
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class SearchRequest(BaseModel):
     normal_query: Optional[str] = ""
@@ -100,3 +110,7 @@ def search(req: SearchRequest):
     )
     results = df.to_dict(orient="records")
     return SearchResult(query=final_query, pages_retrieved=pages_retrieved, results=results)
+
+@app.get("/")
+def health_check():
+    return {"status": "healthy", "message": "DuckDuckGo Scraper API is running"}
