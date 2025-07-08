@@ -16,7 +16,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 
-from backend import config
+import config
 
 class DuckDuckGoScraper:
     """DuckDuckGo search results scraper using Selenium."""

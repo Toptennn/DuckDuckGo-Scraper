@@ -7,8 +7,9 @@ This project exposes the original Streamlit scraper as a REST API with **FastAPI
 The API lives in `backend/main.py` and provides a `/search` endpoint which accepts the same search parameters as the Streamlit version. Start the backend with:
 
 ```bash
+cd backend
 pip install -r requirements.txt
-uvicorn backend.main:app --reload
+uvicorn main:app --reload
 ```
 
 ## Frontend

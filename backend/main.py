@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
-from backend.scraper.duckduckgo import DuckDuckGoScraper
+from scraper import DuckDuckGoScraper
 
 app = FastAPI(title="DuckDuckGo Scraper API")
 
